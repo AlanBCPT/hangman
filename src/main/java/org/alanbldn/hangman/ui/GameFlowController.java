@@ -11,12 +11,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
-import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 
 import org.alanbldn.hangman.ai.ComputerGuesser;
@@ -43,6 +41,7 @@ public final class GameFlowController {
     private static final String DEFAULT_PLAYER_TWO_NAME = "Player 2";
 
     private final Stage stage;
+    private final ViewFactory viewFactory = new ViewFactory();
     private final WordRepository wordRepository = new DictionaryWordRepository();
     private final ComputerGuesser computerGuesser = new ComputerGuesser(wordRepository);
     private GameSetup setup;
@@ -59,15 +58,15 @@ public final class GameFlowController {
     }
 
     private void showGameModeStep() {
-        Label title = createStepTitle("Who do you want to play against?");
+        Label title = viewFactory.createStepTitle("Who do you want to play against?");
 
-        Button vsComputer = createChoiceButton("The Computer");
+        Button vsComputer = viewFactory.createChoiceButton("The Computer");
         vsComputer.setOnAction(e -> {
             setup.mode(GameMode.COMPUTER_OPPONENT);
             showPlayerNamesStep();
         });
 
-        Button vsPlayer = createChoiceButton("Another Player");
+        Button vsPlayer = viewFactory.createChoiceButton("Another Player");
         vsPlayer.setOnAction(e -> {
             setup.mode(GameMode.TWO_PLAYERS);
             showPlayerNamesStep();
@@ -82,16 +81,16 @@ public final class GameFlowController {
         playerOneField.getStyleClass().add("name-field");
 
         VBox root = new VBox(20);
-        root.getChildren().addAll(createFieldLabel("Enter Player 1's name:"), playerOneField);
+        root.getChildren().addAll(viewFactory.createFieldLabel("Enter Player 1's name:"), playerOneField);
 
         TextField playerTwoField = new TextField();
         playerTwoField.getStyleClass().add("name-field");
         if (setup.mode() == GameMode.TWO_PLAYERS) {
             playerTwoField.setText(lastPlayerTwoName);
-            root.getChildren().addAll(createFieldLabel("Enter Player 2's name:"), playerTwoField);
+            root.getChildren().addAll(viewFactory.createFieldLabel("Enter Player 2's name:"), playerTwoField);
         }
 
-        Button next = createPrimaryButton("Next");
+        Button next = viewFactory.createPrimaryButton("Next");
         next.setOnAction(e -> {
             lastPlayerOneName = defaultIfBlank(playerOneField.getText(), DEFAULT_PLAYER_ONE_NAME);
             setup.playerOne(Player.human(lastPlayerOneName));
@@ -113,9 +112,10 @@ public final class GameFlowController {
         options.setAlignment(Pos.CENTER);
 
         for (HangmanTheme theme : HangmanTheme.values()) {
-            ImageView preview = createImageView(loadImage(theme.headPreviewPath()), THEME_PREVIEW_HEIGHT);
+            ImageView preview = viewFactory.createImageView(
+                    viewFactory.loadImage(theme.headPreviewPath()), THEME_PREVIEW_HEIGHT);
 
-            Button select = createChoiceButton(theme.displayName());
+            Button select = viewFactory.createChoiceButton(theme.displayName());
             select.setOnAction(e -> {
                 setup.theme(theme);
                 showWordSourceStep();
@@ -127,20 +127,20 @@ public final class GameFlowController {
             options.getChildren().add(card);
         }
 
-        VBox root = new VBox(20, createStepTitle("Choose a hangman style:"), options);
+        VBox root = new VBox(20, viewFactory.createStepTitle("Choose a hangman style:"), options);
         showStep(root, "Choose Style");
     }
 
     private void showWordSourceStep() {
-        Label question = createStepTitle("Who will choose the secret word?");
+        Label question = viewFactory.createStepTitle("Who will choose the secret word?");
 
-        Button playerOneChooses = createChoiceButton(setup.playerOne().name());
+        Button playerOneChooses = viewFactory.createChoiceButton(setup.playerOne().name());
         playerOneChooses.setOnAction(e -> {
             setup.wordSource(WordSource.PLAYER_ONE);
             afterWordSourceChosen();
         });
 
-        Button playerTwoChooses = createChoiceButton(setup.playerTwo().name());
+        Button playerTwoChooses = viewFactory.createChoiceButton(setup.playerTwo().name());
         playerTwoChooses.setOnAction(e -> {
             setup.wordSource(WordSource.PLAYER_TWO);
             afterWordSourceChosen();
@@ -160,11 +160,11 @@ public final class GameFlowController {
     }
 
     private void showSecretWordEntryStep() {
-        Label prompt = createStepTitle(setup.wordGiver().name() + ", enter the secret word or phrase:");
+        Label prompt = viewFactory.createStepTitle(setup.wordGiver().name() + ", enter the secret word or phrase:");
         PasswordField wordField = new PasswordField();
         wordField.getStyleClass().add("secret-field");
 
-        Button next = createPrimaryButton("Next");
+        Button next = viewFactory.createPrimaryButton("Next");
         next.setDisable(true);
         wordField.textProperty().addListener((observable, oldValue, newValue) -> next.setDisable(newValue.isBlank()));
 
@@ -182,8 +182,8 @@ public final class GameFlowController {
     }
 
     private void showHandoffStep() {
-        Label message = createStepTitle("Pass the device to " + setup.guesser().name() + ".");
-        Button start = createPrimaryButton("Start Guessing");
+        Label message = viewFactory.createStepTitle("Pass the device to " + setup.guesser().name() + ".");
+        Button start = viewFactory.createPrimaryButton("Start Guessing");
         start.setOnAction(e -> showGameplayStep());
 
         VBox root = new VBox(20, message, start);
@@ -193,51 +193,56 @@ public final class GameFlowController {
     private void showGameplayStep() {
         RoundState roundState = new RoundState(new SecretWord(setup.secretWord()));
 
-        ImageView stageImage = createImageView(null, STAGE_IMAGE_HEIGHT);
-
+        ImageView stageImage = viewFactory.createImageView(null, STAGE_IMAGE_HEIGHT);
         Label wordLabel = new Label();
         wordLabel.getStyleClass().add("word-label");
-
         Label statusLabel = new Label(setup.guesser().name() + " is guessing");
         statusLabel.getStyleClass().add("status-label");
 
-        Runnable refreshBoard = () -> {
-            stageImage.setImage(loadImage(setup.theme().stageImagePath(roundState.wrongGuessCount())));
-            wordLabel.setText(roundState.secretWord().maskedDisplay());
-        };
+        Runnable refreshBoard = () -> updateBoard(stageImage, wordLabel, roundState);
         refreshBoard.run();
 
         Map<Character, Button> letterButtons = new LinkedHashMap<>();
         boolean guesserIsComputer = setup.guesser().isComputer();
-
-        Consumer<Character> applyGuess = letter -> {
-            GuessResult result = roundState.guess(letter);
-            Button button = letterButtons.get(letter);
-            button.setDisable(true);
-            button.getStyleClass().add(result == GuessResult.CORRECT ? "correct-letter" : "incorrect-letter");
-            refreshBoard.run();
-
-            RoundOutcome outcome = roundState.outcome();
-            if (outcome != RoundOutcome.IN_PROGRESS) {
-                showGameOverStep(outcome, roundState);
-            }
-        };
+        Consumer<Character> applyGuess = letter -> handleGuess(letter, roundState, letterButtons, refreshBoard);
 
         GridPane alphabet = buildAlphabetGrid(letterButtons, applyGuess, guesserIsComputer);
-
         VBox root = new VBox(12, statusLabel, stageImage, wordLabel, alphabet);
 
         if (guesserIsComputer) {
-            Button computerGuessButton = createPrimaryButton("Let the Computer Guess");
-            computerGuessButton.setOnAction(e -> {
-                char letter = computerGuesser.nextGuess(roundState);
-                applyGuess.accept(letter);
-                computerGuessButton.setDisable(roundState.outcome() != RoundOutcome.IN_PROGRESS);
-            });
-            root.getChildren().add(computerGuessButton);
+            root.getChildren().add(buildComputerGuessButton(roundState, applyGuess));
         }
 
         showStep(root, "Guess the Word");
+    }
+
+    private void updateBoard(ImageView stageImage, Label wordLabel, RoundState roundState) {
+        stageImage.setImage(viewFactory.loadImage(setup.theme().stageImagePath(roundState.wrongGuessCount())));
+        wordLabel.setText(roundState.secretWord().maskedDisplay());
+    }
+
+    private void handleGuess(char letter, RoundState roundState, Map<Character, Button> letterButtons,
+                              Runnable refreshBoard) {
+        GuessResult result = roundState.guess(letter);
+        Button button = letterButtons.get(letter);
+        button.setDisable(true);
+        button.getStyleClass().add(result == GuessResult.CORRECT ? "correct-letter" : "incorrect-letter");
+        refreshBoard.run();
+
+        RoundOutcome outcome = roundState.outcome();
+        if (outcome != RoundOutcome.IN_PROGRESS) {
+            showGameOverStep(outcome, roundState);
+        }
+    }
+
+    private Button buildComputerGuessButton(RoundState roundState, Consumer<Character> applyGuess) {
+        Button computerGuessButton = viewFactory.createPrimaryButton("Let the Computer Guess");
+        computerGuessButton.setOnAction(e -> {
+            char letter = computerGuesser.nextGuess(roundState);
+            applyGuess.accept(letter);
+            computerGuessButton.setDisable(roundState.outcome() != RoundOutcome.IN_PROGRESS);
+        });
+        return computerGuessButton;
     }
 
     private GridPane buildAlphabetGrid(Map<Character, Button> letterButtons, Consumer<Character> applyGuess,
@@ -269,52 +274,19 @@ public final class GameFlowController {
 
     private void showGameOverStep(RoundOutcome outcome, RoundState roundState) {
         Player winner = outcome == RoundOutcome.WORD_GUESSED ? setup.guesser() : setup.wordGiver();
-        Label resultLabel = createStepTitle(winner.name() + " wins! The word was \""
+        Label resultLabel = viewFactory.createStepTitle(winner.name() + " wins! The word was \""
                 + roundState.secretWord().revealedText() + "\".");
         resultLabel.getStyleClass().add("result-label");
 
-        ImageView finalImage = createImageView(
-                loadImage(setup.theme().stageImagePath(roundState.wrongGuessCount())), STAGE_IMAGE_HEIGHT);
+        ImageView finalImage = viewFactory.createImageView(
+                viewFactory.loadImage(setup.theme().stageImagePath(roundState.wrongGuessCount())),
+                STAGE_IMAGE_HEIGHT);
 
-        Button playAgain = createPrimaryButton("Play Again");
+        Button playAgain = viewFactory.createPrimaryButton("Play Again");
         playAgain.setOnAction(e -> start());
 
         VBox root = new VBox(20, finalImage, resultLabel, playAgain);
         showStep(root, "Game Over");
-    }
-
-    private Label createStepTitle(String text) {
-        Label label = new Label(text);
-        label.getStyleClass().add("step-title");
-        label.setWrapText(true);
-        label.setTextAlignment(TextAlignment.CENTER);
-        label.setMaxWidth(620);
-        return label;
-    }
-
-    private Label createFieldLabel(String text) {
-        Label label = new Label(text);
-        label.getStyleClass().add("field-label");
-        return label;
-    }
-
-    private Button createPrimaryButton(String text) {
-        Button button = new Button(text);
-        button.getStyleClass().add("primary-button");
-        return button;
-    }
-
-    private Button createChoiceButton(String text) {
-        Button button = new Button(text);
-        button.getStyleClass().add("choice-button");
-        return button;
-    }
-
-    private ImageView createImageView(Image image, double fitHeight) {
-        ImageView imageView = new ImageView(image);
-        imageView.setFitHeight(fitHeight);
-        imageView.setPreserveRatio(true);
-        return imageView;
     }
 
     private void showStep(VBox root, String title) {
@@ -328,10 +300,6 @@ public final class GameFlowController {
         scene.getStylesheets().add(getClass().getResource("/css/hangman.css").toExternalForm());
         stage.setScene(scene);
         stage.show();
-    }
-
-    private Image loadImage(String path) {
-        return new Image(getClass().getResourceAsStream(path));
     }
 
     private static String defaultIfBlank(String value, String fallback) {
