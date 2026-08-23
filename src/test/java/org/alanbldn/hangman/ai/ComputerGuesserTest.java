@@ -96,6 +96,6 @@ class ComputerGuesserTest {
         ComputerGuesser guesser = new ComputerGuesser(emptyVocabulary);
         RoundState round = new RoundState(new SecretWord("cat"));
 
-        assertTrue(guesser.nextGuess(round) == 'E');
+        assertEquals('E', guesser.nextGuess(round));
     }
 }
